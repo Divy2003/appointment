@@ -24,6 +24,7 @@ const corsOptions = {
   origin: [
     process.env.FRONTEND_URL,
     'http://localhost:3000',
+    'http://localhost:12001',
     'http://localhost:5173',
     'https://work-2-emvrioryblzlowme.prod-runtime.all-hands.dev'
   ],
@@ -100,7 +101,7 @@ app.use('*', (req, res) => {
   });
 });
 
-const PORT = process.env.PORT || 12000;
+const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);

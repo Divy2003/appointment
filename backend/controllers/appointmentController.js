@@ -2,22 +2,11 @@ import mongoose from 'mongoose';
 import Appointment from '../models/Appointment.js';
 import Patient from '../models/Patient.js';
 import Doctor from '../models/Doctor.js';
-import QRCode from 'qrcode';
-import { v4 as uuidv4 } from 'uuid';
 
 // Create new appointment
 export const createAppointment = async (req, res) => {
   try {
-    const { patientData, doctorId, reason, registrationMethod = 'website' } = req.body;
-
-    // Check if doctor exists
-    const doctor = await Doctor.findById(doctorId);
-    if (!doctor) {
-      return res.status(404).json({
-        success: false,
-        message: 'Doctor not found'
-      });
-    }
+    const { patientData, doctorIds, reason } = req.body;
 
     // Create or find patient
     let patient = await Patient.findOne({ phone: patientData.phone });
@@ -30,88 +19,66 @@ export const createAppointment = async (req, res) => {
       await patient.save();
     }
 
-    // Get next queue number for today
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    const lastAppointment = await Appointment.findOne({
-      doctor: doctorId,
-      appointmentDate: {
-        $gte: today,
-        $lt: tomorrow
+    const appointments = [];
+    for (const doctorId of doctorIds) {
+      // Check if doctor exists
+      const doctor = await Doctor.findById(doctorId);
+      if (!doctor) {
+        // In a real-world scenario, you might want to handle this more gracefully
+        // For example, by collecting all invalid doctor IDs and returning an error
+        continue;
       }
-    }).sort({ queueNumber: -1 });
 
-    const queueNumber = lastAppointment ? lastAppointment.queueNumber + 1 : 1;
+      // Get next queue number for today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
 
-    // Generate QR code data
-    const qrCodeData = uuidv4();
-    const qrCodeUrl = await QRCode.toDataURL(`${process.env.FRONTEND_URL}/appointment/${qrCodeData}`);
+      const lastAppointment = await Appointment.findOne({
+        doctor: doctorId,
+        appointmentDate: {
+          $gte: today,
+          $lt: tomorrow
+        }
+      }).sort({ queueNumber: -1 });
 
-    // Create appointment
-    const appointment = new Appointment({
-      patient: patient._id,
-      doctor: doctorId,
-      queueNumber,
-      reason,
-      registrationMethod,
-      qrCodeData
-    });
+      const queueNumber = lastAppointment ? lastAppointment.queueNumber + 1 : 1;
 
-    await appointment.save();
+      // Create appointment
+      const appointment = new Appointment({
+        patient: patient._id,
+        doctor: doctorId,
+        queueNumber,
+        reason,
+      });
 
-    // Populate the appointment data
-    await appointment.populate('patient', 'name phone age gender');
-    await appointment.populate('doctor', 'name specialization');
+      await appointment.save();
+
+      // Populate the appointment data
+      await appointment.populate('patient', 'name phone age gender');
+      await appointment.populate('doctor', 'name specialization');
+
+      appointments.push(appointment);
+
+      // Emit socket event for real-time updates
+      req.io.to(`doctor_${doctorId}`).emit('newAppointment', {
+        appointment: await appointment.populate('patient', 'name phone age gender')
+      });
+    }
 
     res.status(201).json({
       success: true,
       data: {
-        appointment,
-        qrCode: qrCodeUrl
+        appointments
       },
-      message: 'Appointment created successfully'
-    });
-
-    // Emit socket event for real-time updates
-    req.io.to(`doctor_${doctorId}`).emit('newAppointment', {
-      appointment: await appointment.populate('patient', 'name phone age gender')
+      message: 'Appointments created successfully'
     });
 
   } catch (error) {
     res.status(400).json({
       success: false,
-      message: 'Error creating appointment',
-      error: error.message
-    });
-  }
-};
-
-// Get appointment by QR code
-export const getAppointmentByQR = async (req, res) => {
-  try {
-    const { qrCode } = req.params;
-    const appointment = await Appointment.findOne({ qrCodeData: qrCode })
-      .populate('patient', 'name phone age gender')
-      .populate('doctor', 'name specialization');
-
-    if (!appointment) {
-      return res.status(404).json({
-        success: false,
-        message: 'Appointment not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      data: appointment
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching appointment',
+      message: 'Error creating appointments',
       error: error.message
     });
   }
@@ -137,8 +104,9 @@ export const updateAppointmentStatus = async (req, res) => {
 
     if (status === 'in-progress' && !appointment.actualStartTime) {
       appointment.actualStartTime = new Date();
-    } else if (status === 'completed' && !appointment.actualEndTime) {
+    } else if (status === 'completed' || status === 'cancelled') {
       appointment.actualEndTime = new Date();
+      appointment.queueType = status;
     }
 
     await appointment.save();

@@ -27,7 +27,7 @@ const appointmentSchema = new mongoose.Schema({
   },
   queueType: {
     type: String,
-    enum: ['regular', 'late'],
+    enum: ['regular', 'late', 'completed', 'cancelled'],
     default: 'regular'
   },
   reason: {
@@ -46,14 +46,6 @@ const appointmentSchema = new mongoose.Schema({
   },
   actualEndTime: {
     type: Date
-  },
-  registrationMethod: {
-    type: String,
-    enum: ['website', 'qr-code'],
-    default: 'website'
-  },
-  qrCodeData: {
-    type: String
   }
 }, {
   timestamps: true

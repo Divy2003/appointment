@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import QRCode from 'qrcode.react';
 import { doctorAPI, appointmentAPI } from '../services/api';
 
 const PatientRegistration = () => {
@@ -15,19 +14,33 @@ const PatientRegistration = () => {
     address: '',
     doctorId: '',
     reason: '',
-    registrationMethod: 'website'
   });
 
   useEffect(() => {
     fetchDoctors();
   }, []);
 
+  const setMockDoctors = () => {
+    const mockDoctors = [
+      { _id: 'doc1', name: 'Dr. John Doe', specialization: 'Cardiologist', workingHours: { start: '09:00', end: '17:00' }, averageConsultationTime: 15 },
+      { _id: 'doc2', name: 'Dr. Jane Smith', specialization: 'Dermatologist', workingHours: { start: '10:00', end: '18:00' }, averageConsultationTime: 20 },
+    ];
+    setDoctors(mockDoctors);
+  };
+
   const fetchDoctors = async () => {
     try {
       const response = await doctorAPI.getAllDoctors();
-      setDoctors(response.data.data);
+      if (response.data.data && response.data.data.length > 0) {
+        setDoctors(response.data.data);
+      } else {
+        console.log("No doctors found from API, using mock data.");
+        setMockDoctors();
+      }
     } catch (error) {
       console.error('Error fetching doctors:', error);
+      console.log("Error fetching doctors, using mock data.");
+      setMockDoctors();
     }
   };
 
@@ -55,7 +68,6 @@ const PatientRegistration = () => {
         },
         doctorId: formData.doctorId,
         reason: formData.reason,
-        registrationMethod: formData.registrationMethod
       };
 
       const response = await appointmentAPI.createAppointment(appointmentData);
@@ -71,7 +83,6 @@ const PatientRegistration = () => {
         address: '',
         doctorId: '',
         reason: '',
-        registrationMethod: 'website'
       });
     } catch (error) {
       console.error('Error creating appointment:', error);
@@ -207,19 +218,6 @@ const PatientRegistration = () => {
               />
             </div>
 
-            <div className="form-group">
-              <label htmlFor="registrationMethod">Registration Method</label>
-              <select
-                id="registrationMethod"
-                name="registrationMethod"
-                value={formData.registrationMethod}
-                onChange={handleInputChange}
-              >
-                <option value="website">Website</option>
-                <option value="qr-code">QR Code</option>
-              </select>
-            </div>
-
             <button type="submit" disabled={loading} className="submit-btn">
               {loading ? 'Creating Appointment...' : 'Book Appointment'}
             </button>
@@ -237,20 +235,6 @@ const PatientRegistration = () => {
                 <p><strong>Status:</strong> {appointment.appointment.status}</p>
                 <p><strong>Reason:</strong> {appointment.appointment.reason}</p>
                 <p><strong>Date:</strong> {new Date(appointment.appointment.appointmentDate).toLocaleString()}</p>
-              </div>
-              
-              <div className="qr-section">
-                <h4>📱 Your QR Code</h4>
-                <div className="qr-code">
-                  <QRCode 
-                    value={appointment.appointment.qrCodeData} 
-                    size={200}
-                    level="H"
-                  />
-                </div>
-                <p className="qr-instructions">
-                  Save this QR code or take a screenshot. You can use it to check your appointment status.
-                </p>
               </div>
             </div>
             

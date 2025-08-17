@@ -1,7 +1,6 @@
 import express from 'express';
 import {
   createAppointment,
-  getAppointmentByQR,
   updateAppointmentStatus,
   moveToLateQueue,
   getPatientAppointments,
@@ -12,9 +11,6 @@ const router = express.Router();
 
 // POST /api/appointments - Create new appointment
 router.post('/', createAppointment);
-
-// GET /api/appointments/qr/:qrCode - Get appointment by QR code
-router.get('/qr/:qrCode', getAppointmentByQR);
 
 // PUT /api/appointments/:appointmentId/status - Update appointment status
 router.put('/:appointmentId/status', updateAppointmentStatus);
